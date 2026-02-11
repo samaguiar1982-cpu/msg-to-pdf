@@ -1,0 +1,63 @@
+import extract_msg
+import os
+
+source_folder = r"Z:\z-UPS Flight 2976 Cases\Investigation\ORR\Okolona Fire\Response\EMAILS"
+output_folder = r"Z:\z-UPS Flight 2976 Cases\Investigation\ORR\Okolona Fire\Response\EMAILS\Extracted_Nested"
+
+os.makedirs(output_folder, exist_ok=True)
+
+found_count = 0
+scanned_count = 0
+
+for filename in os.listdir(source_folder):
+    if not filename.lower().endswith('.msg'):
+        continue
+
+    scanned_count += 1
+    filepath = os.path.join(source_folder, filename)
+
+    try:
+        msg = extract_msg.Message(filepath)
+
+        for i, attachment in enumerate(msg.attachments):
+            att_name = getattr(attachment, 'longFilename', None) or getattr(attachment, 'shortFilename', None) or f"embedded_{i}"
+
+            is_embedded_email = False
+
+            if att_name.lower().endswith('.msg'):
+                is_embedded_email = True
+            elif hasattr(attachment, 'type') and 'msg' in str(getattr(attachment, 'type', '')).lower():
+                is_embedded_email = True
+                att_name = att_name if att_name.lower().endswith('.msg') else att_name + '.msg'
+
+            if is_embedded_email:
+                found_count += 1
+                safe_parent = filename.replace('.msg', '')[:80]
+                safe_att = att_name[:80]
+                save_name = f"{safe_parent}__nested__{safe_att}"
+                save_path = os.path.join(output_folder, save_name)
+
+                counter = 1
+                while os.path.exists(save_path):
+                    name, ext = os.path.splitext(save_name)
+                    save_path = os.path.join(output_folder, f"{name}_{counter}{ext}")
+                    counter += 1
+
+                try:
+                    with open(save_path, 'wb') as f:
+                        f.write(attachment.data)
+                    print(f"EXTRACTED: {att_name}")
+                    print(f"  FROM: {filename}")
+                    print(f"  SAVED: {save_path}")
+                    print()
+                except Exception as e:
+                    print(f"  Could not save: {e}")
+
+        msg.close()
+
+    except Exception as e:
+        print(f"SKIPPED {filename}: {e}")
+
+print("=" * 50)
+print(f"Done. Scanned {scanned_count} files. Extracted {found_count} nested emails.")
+print(f"Output folder: {output_folder}")
